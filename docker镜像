@@ -1,0 +1,156 @@
+制作出你的第一个docker镜像
+一、认识docker
+Docker 是一个开源的应用容器引擎，让开发者可以打包他们的应用以及依赖包到一个可移植的容器中，然后发布到任何流行的 Linux 机器上，也可以实现虚拟化。可以将运行的容器看作是一个小型的系统。
+
+Docker 将应用程序与该程序的依赖，打包在一个文件里面。运行这个文件，就会生成一个虚拟容器。程序在这个虚拟容器里运行，就好像在真实的物理机上运行一样。总体来说，Docker 的接口相当简单，用户可以方便地创建和使用容器，把自己的应用放入容器。还可以对其进行版本管理、复制、分享、修改，就像管理普通的代码一样。让其可以在任何安装了Docker的机器上运行，而不用关心底层操作系统，emm,有类似于点java有jvm而可以跨平台的感觉。并且一台机器可以部署多个容器，所以一台机器就可以跑多个应用服务，因此在本机就可以模拟出微服务架构。
+
+二、docker环境安装
+注：目前docker只能运行在64位的环境上
+
+本文以CentOs7为例，安装非常简单，只需要将其离线安装包下载下来安装即可，当然也可以直接在线安装使用命令 yum -y install docker。安装完毕后启动服务即可service docker start。可以使用docker version命令验证是否成功安装。
+
+三、docker镜像（image）、docker容器（container）、Dockerfile文件
+     1、docker镜像
+Docker 把应用程序及其依赖，打包在 image 文件里面。只有通过这个文件，才能生成 Docker 容器。image 文件可以看作是容器的模板。Docker 根据 image 文件生成容器的实例。同一个 image 文件，可以生成多个同时运行的容器实例。image 是二进制文件。实际开发中，一个 image 文件往往通过继承另一个 image 文件，加上一些个性化设置而生成。举例来说，你可以在 Ubuntu 的 image 基础上，往里面加入 tomcat ,msyql等，形成你的 image。我们的云证书管理平台就是在官方的msyql镜像中加入我们应用所需的tomcat、jdk等所制作的。
+
+docker search 命令可以查找你想要下载的镜像。
+
+docker pull 命令可以直接从镜像仓库下载你想要的镜像。
+
+     2、docker容器
+容器则是 image 文件生成的实例，本身也是一个文件，称为容器文件。也就是说，一旦容器生成，就会同时存在两个文件： image 文件和容器文件。而且关闭容器并不会删除容器文件，只是容器停止运行而已。
+
+docker images可以列出所有的镜像，docker ps -a可以列出所有的容器。
+
+docker start/stop/restart  container 启动，停止，重启容器
+
+     3、Dockerfile文件
+了解了这么多，接下来的问题就是，如何制作一个镜像？如果你要推广自己的软件，势必要自己制作 image 文件。这就需要用到 Dockerfile 文件。它是一个文本文件，用来配置 image。Docker 根据 该文件生成二进制的 镜像文件image。
+
+Dockerfile分为四部分组成：基础镜像信、维护者信息、镜像操作指令和容器启动时执行指令，例如：
+
+#第一行必须指令基于的基础镜像                                                                      From ubutu 
+
+#维护者信息                                                                                         MAINTAINER docker_user docker_user@mail.com
+
+#镜像的操作指令  （指令有很多，大家可以网上了解）                                    RUN apt-get update && apt-get install -y ngnix   #运行指令
+
+#容器启动时执行指令，下面指令就是容器在启动时会执行run.sh脚本，我们可以 在run.sh脚本中写入一些初始化的命令，比如启动并初始化msyql,启动tomcat等                                                                                      ENTRYPOINT [“/run.sh”]
+
+三、docker镜像制作
+接下来就是紧张而又刺激的镜像制作环节，前面说了要制作出一个镜像就必须要通过Dockerfile文件来配置制作。下面通过一个示例我们做一个java+tomcat+mysql的docker镜像，在做镜像之前我们需要选择一个基础镜像，可以选择某个操作系统作为基础镜像，在这里我们为了方便直接选择官方的mysql：5.7.22镜像作为基础镜像，其实官方msyql基础镜像也是基于debiban系统镜像做的，之前说过镜像是可以继承的。
+
+下载好jdk与tomcat压缩包，我们在目录下新建一个Dockerfile文件，然后对这个文件进行编辑：
+
+FROM mysql:5.7.22      #选择msyql官方镜像作为基础镜像             MAINTAINER abcdefg   #镜像维护者信息
+
+ADD jdk-8u111-linux-x64.tar.gz /usr/local   #ADD将jdk复制到系统指定目录并自动解压，并删除原压缩包
+ENV JAVA_HOME=/usr/local/jdk1.8.0_111 #添加jdk环境变量
+ENV PATH=$JAVA_HOME/bin:$PATH
+
+WORKDIR /tmp  #将工作目录定位到/tmp                                                   ENV   TOMCAT_HOME=/opt/tomcat  #定义一个tomcat路径变量              #复制tomcat包到指定目录                                                                       COPY apache-tomcat-8.0.52.tar.gz /tmp/apache-tomcat-8.0.52.tar.gz
+
+#执行一系列tomcat安装命令，创建tomcat用户等                                      RUN groupadd tomcat && \
+        useradd -s /bin/false -g tomcat -d $TOMCAT_HOME tomcat && \
+         mkdir $TOMCAT_HOME && \
+        tar xzvf apache-tomcat-$TOMCAT_MAJOR_VERSION*tar.gz -C $TOMCAT_HOME –strip-components=1 && \
+        chown -R tomcat:tomcat $TOMCAT_HOME && \
+        chmod -R g+r $TOMCAT_HOME/conf && \
+        chmod g+x $TOMCAT_HOME/conf && \
+        rm -rf $TOMCAT_HOME/webapps/* && \
+        rm -rf /tmp/apache-tomcat-$TOMCAT_VERSION.tar.gz
+
+ADD yourWebApp.war $TOMCAT_HOME/webapps/ #添加你的项目到tomcat
+
+ADD sql /sql/    #添加你项目的数据库初始化脚本到系统/sql/
+
+COPY run.sh /run.sh #复制脚本到系统                                                      RUN chmod 755 /run.sh
+
+VOLUME [“/var/lib/mysql”] #将mysql数据卷挂载到宿主机
+
+EXPOSE 3306 8080    #将3306和8080端口暴露使外界能访问
+
+ENTRYPOINT [“/run.sh”]  #容器启动时会执行run.sh脚本(启动msyql,tomcat,初始化数据库，自己编写，也可以等容器运行后再进入容器初始化，只不过启动初始化体验会好)
+
+到此Dockerfile配置完毕，通过命令docker image build -t demo .或者docker image build -t demo:0.0.1 . 创建镜像。上面命令中，-t参数用来指定 image 文件的名字，后面还可以用冒号指定标签。如果不指定，默认的标签就是latest。最后的那个点表示 Dockerfile 文件所在的路径，上例是当前路径，所以是一个点。
+
+如果运行成功，就可以看到新生成的 image 了，恭喜你制作出了一个简易的javaWeb应用服务器系统。使用docker images查看镜像。
+
+接下来就将刚刚制作的镜像生成容器：                                                                    docker run -d –name mydemo  -p 8089:8080 -e MYSQL_ROOT_PASSWORD=123456 demo                                            –name参数：指定生成容器名称                                                                    -p参数：容器的8080端口映射到主机的8089端口                                              -e MYSQL_ROOT_PASSWORD=123456 :初始化数据库root密码               demo是镜像名
+
+命令执行完后容器就生成了并且运行起来了。可以使用命令docker ps -a查看，通过命令  docker exec -it mydemo bash 可以进入容器，会发现容器里面其实就相当于一个系统。
+
+我们可以将制作的镜像上传到镜像仓库docker push  demo,也可以将镜像打包成tar文件： docker save demo > demo.tar。将tar文件传输到任何装有docker环境的机器上，将此镜像tar文件导入就生成了镜像：docker load < demo.tar。这就是便于移植的好处。
+
+本文讲的内容只是作为一个初学者角度来讲解，如有问题欢迎指出，关于docker的知识还有很多，本文只是一些常用的知识点。大家有疑问或者感兴趣的地方可以自己与网上找，也欢迎一起讨论。
+
+
+/***********************************************************************************/
+docker安装：yum -y install docker
+启动/停止/重启主机docker服务：service docker start/stop/restart
+下载镜像：docker pull image:tag
+上传镜像：docker push image:tag(一般很少用不需要上传)
+查看镜像：docker images
+查看容器：docker ps -a
+运行镜像：docker run -d --name containerName -v /etc/localtime:/etc/localtime:ro -p 8089:8080 -e MYSQL_ROOT_PASSWORD=123456 imageName:tag
+进入容器：docker exec -it containerName bash
+停掉容器：docker stop containerName
+启动容器：docker start containerName
+删除容器：docker rm containerName/containerNameID
+删除镜像：docker rmi imageName/imageID
+查看容器启动日志 docker logs -f -t --tail 20 containerName
+创建镜像 docker build -t imageName:tag .
+将镜像打包 docker save imageName:tag > imageName.tar
+加载镜像：docker load < license_server.tar
+从主机复制文件到容器 docker cp host_path container:container_path
+从容器复制文件到主机 docker cp container:container_path host_path
+
+/***********************************************************************************/
+
+
+/***********************************************************************************/
+#选择msyql官方镜像作为基础镜像
+FROM mysql:5.7.22
+#镜像维护者信息  
+MAINTAINER abcdefg
+
+#ADD将jdk复制到系统指定目录并自动解压，并删除原压缩包,设置到javahome环境变量
+ADD jdk-8u111-linux-x64.tar.gz /usr/local   
+ENV JAVA_HOME=/usr/local/jdk1.8.0_111 
+ENV PATH=$JAVA_HOME/bin:$PATH
+
+#将工作目录定位到/tmp
+WORKDIR /tmp    
+#定义一个tomcat路径变量                                             
+ENV TOMCAT_HOME=/opt/tomcat              
+#复制tomcat包到指定目录                                                                       
+COPY apache-tomcat-8.0.52.tar.gz /tmp/apache-tomcat-8.0.52.tar.gz
+#执行一系列tomcat安装命令，创建tomcat用户等                                      
+RUN groupadd tomcat && \
+    useradd -s /bin/false -g tomcat -d $TOMCAT_HOME tomcat && \
+    mkdir $TOMCAT_HOME && \
+    tar xzvf apache-tomcat-$TOMCAT_MAJOR_VERSION*tar.gz -C $TOMCAT_HOME –strip-components=1 && \
+    chown -R tomcat:tomcat $TOMCAT_HOME && \
+    chmod -R g+r $TOMCAT_HOME/conf && \
+    chmod g+x $TOMCAT_HOME/conf && \
+    rm -rf $TOMCAT_HOME/webapps/* && \
+    rm -rf /tmp/apache-tomcat-$TOMCAT_VERSION.tar.gz
+
+#添加你的项目到tomcat
+ADD yourWebApp.war $TOMCAT_HOME/webapps/ 
+#添加你项目的数据库初始化脚本到系统/sql/
+ADD sql /sql/    
+#复制脚本到系统
+COPY run.sh /run.sh                                                      
+RUN chmod 755 /run.sh
+
+#将mysql数据卷挂载到宿主机
+VOLUME [“/var/lib/mysql”] 
+
+#将3306和8080端口暴露使外界能访问
+EXPOSE 3306 8080    
+
+#容器启动时会执行run.sh脚本(启动msyql,tomcat,初始化数据库，自己编写，也可以等容器运行后再进入容器初始化，只不过启动初始化体验会好)
+ENTRYPOINT [“/run.sh”]  
+/***********************************************************************************/
+
