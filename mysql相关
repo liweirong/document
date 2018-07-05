@@ -1,0 +1,16 @@
+Please DISCARD the tablespace before IMPORT
+    原因：这个是因为表删除不干净导致的，目录删除了 但是物理文件还在
+    解决办法：使用命令得到mysql数据库文件保存的位置  ① mysql> show global variables like "%datadir%";
+              然后删除：表名.frm 表名.ibd；这两个文件 即可;
+    
+深度删库的方式：
+    删除以下文件（用①查询出的路径，如果数据库存储在/data/mysql/则将/var/lib/mysql/替换为/data/mysql/）
+    a)	rm –rf /var/lib/mysql/ssm/          ----需要删除的数据库
+    b)	rm –rf /var/lib/mysql/ib*
+    c)	rm -rf /var/lib/mysql/mysql/innodb_index_stats*
+        rm -rf /var/lib/mysql/mysql/innodb_table_stats*
+        rm -rf /var/lib/mysql/mysql/slave_master_info*
+        rm -rf /var/lib/mysql/mysql/slave_relay_log_info*
+        rm -rf /var/lib/mysql/mysql/slave_worker_info*
+
+备份和恢复数据：
